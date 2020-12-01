@@ -1,0 +1,57 @@
+#!/usr/bin/php
+<?php
+
+$raw = FILE(dirname(__FILE__)."/expenses");
+
+$typed = array();
+foreach($raw as $val)$typed[] = (int)($val ? $val : 0);
+
+sort($typed,SORT_NUMERIC);
+
+$first = array_shift($typed);
+$last = array_pop($typed);
+
+do {
+	if($first+$last>2020)$last = array_pop($typed);
+	elseif($first+$last<2020)$first = array_shift($typed);
+}while(!empty($typed) && ($first+$last) != 2020);
+
+echo "First = $first, Last = $last, === ".($first+$last)." ==> ".($first*$last).PHP_EOL;
+
+$raw = FILE(dirname(__FILE__)."/expenses");
+
+$typed = array();
+foreach($raw as $val)$typed[] = (int)($val ? $val : 0);
+
+sort($typed,SORT_NUMERIC);
+
+$first = array_shift($typed);
+$last = array_pop($typed);
+
+$found = false;
+
+$mid = 0;
+do {
+	if($first+$last>2020)$last = array_pop($typed);
+	elseif($first+$last<2020){
+		$target = 2020-($first+$last);
+		$found = false;
+		$mid = 0;
+		foreach($typed as $val){
+			$mid =$val;
+			if($found = ($target == $val) ? true : false){
+				break;
+			}elseif($val>$target){
+				break;
+			}
+		}
+		if(!$found){
+			if($mid>$target)$last = array_pop($typed);
+			else $first = array_shift($typed);
+
+		}
+	}
+}while(!empty($typed) && !$found);
+
+echo "First = $first, Mid = $mid, Last = $last, === ".($first+$mid+$last)." ==> ".($first*$mid*$last).PHP_EOL;
+
