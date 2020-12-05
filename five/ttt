@@ -1,0 +1,53 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+
+$raw = FILE(dirname(__FILE__)."/passes");
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+$rows = array();
+for($i=0;$i<128;$i++) {
+	$key = str_pad(decbin($i),7,'0',STR_PAD_LEFT);
+	$key = Strings::ReplaceAll('0','F',$key);
+	$key = Strings::ReplaceAll('1','B',$key);
+	$rows[$key]=$i;
+}
+
+$cols = array();
+for($i=0;$i<8;$i++) {
+	$key = str_pad(decbin($i),3,'0',STR_PAD_LEFT);
+	$key = Strings::ReplaceAll('0','L',$key);
+	$key = Strings::ReplaceAll('1','R',$key);
+	$cols[$key]=$i;
+}
+
+
+$seats = array();
+foreach($raw as $seat){
+	if($seat = trim($seat)){
+		$rKey = substr($seat,0,7);
+		$cKey = substr($seat,7,3);
+		$seats[$seat] = $rows[$rKey]*8+$cols[$cKey];
+		INFO("Seat = $seat, Row = ".$rows[$rKey].", Col = ".$cols[$cKey]. " [$rKey,$cKey]");
+	}
+}
+
+INFO("Highest = ".max($seats));
+
+$start = false;
+for($i=0;$i<1024;$i++){
+	if(!$start && in_array($i,$seats))$start = true;
+	if($start && !in_array($i,$seats)){
+		INFO("My Seat = $i");
+		break;
+	}
+}

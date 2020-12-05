@@ -1,0 +1,68 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+
+$raw = FILE(dirname(__FILE__)."/passwords");
+
+function between($val, $min, $max) {
+	return ($val >= $min && $val <= $max);
+}
+
+function tobValid($pass,$p1,$p2,$char){
+	$rtn = false;
+	$p1--;
+	$p2--;
+	if(strlen($pass)>$p1 && strlen($pass)>=$p2){
+		$rtn |= ($pass[$p1] == $char) ? true : false ;
+		$rtn |= ($pass[$p2] == $char) ? true : false ;
+		$rtn &= ($pass[$p1] == $pass[$p2]) ? false : true;
+	}
+	return $rtn;
+}
+
+
+$valid_sled = array();
+$invalid_sled = array();
+$valid_tob = array();
+$invalid_tob = array();
+foreach ($raw as $line) {
+	$line = trim($line);
+	$least = trim(Strings::Before($line,'-'));
+	$most = trim(Strings::Between($line,'-',' '));
+	$char = trim(Strings::Between($line,' ',':'));
+	$pass = trim(Strings::AfterLast($line,' '));
+
+	if(Strings::isEmpty($least)
+		|| Strings::isEmpty($most)
+		|| Strings::isEmpty($char)
+		|| Strings::isEmpty($pass)
+	){
+		FATAL("One of these is empty: $line");
+	}
+
+	$charsFound = strlen($pass) - strlen(Strings::ReplaceAll($char,'',$pass));
+
+	if(between($charsFound,$least,$most)){
+		$valid_sled[] = $pass;
+		INFO("Valid SLED:   $pass ($line)");
+	}else{
+		$invalid_sled[] = $pass;
+		INFO("Invalid SLED: $pass ($line)");
+	}
+
+	if(tobValid($pass,$least,$most,$char)){
+		$valid_tob[] = $pass;
+		INFO("Valid TOB:    $pass ($line)");
+	}else{
+		$invalid_tob[] = $pass;
+		INFO("Invalid TOB:  $pass ($line)");
+	}
+
+}
+
+INFO("Sled Rental Valid PAsswords: ".count($valid_sled));
+INFO("Toboggan Rental Valid PAsswords: ".count($valid_tob));

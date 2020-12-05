@@ -1,0 +1,120 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+
+$raw = FILE(dirname(__FILE__)."/passports");
+
+$fields = [
+	'byr',
+	'iyr',
+	'eyr',
+	'hgt',
+	'hcl',
+	'ecl',
+	'pid',
+	//'cid',
+];
+
+$dbg = '';
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+function byrIsValid($line,$field){
+	GLOBAL $dbg;
+	$val = Strings::Between("$line ","$field:"," ");
+	$rtn = between($val,1920,2002);
+	if($dbg==$field)INFO(__METHOD__." $line $field = $val = ".Strings::Human($rtn));
+	return $rtn;
+}
+
+function iyrIsValid($line,$field){
+	GLOBAL $dbg;
+	$val = Strings::Between("$line ","$field:"," ");
+	$rtn = between($val,2010,2020);
+	if($dbg==$field)INFO(__METHOD__." $line $field = $val = ".Strings::Human($rtn));
+	return $rtn;
+}
+
+function eyrIsValid($line,$field){
+	GLOBAL $dbg;
+	$val = Strings::Between("$line ","$field:"," ");
+	$rtn = between($val,2020,2030);
+	if($dbg==$field)INFO(__METHOD__." $line $field = $val = ".Strings::Human($rtn));
+	return $rtn;
+}
+
+function hgtIsValid($line,$field){
+	GLOBAL $dbg;
+	$rtn = false;
+	$val = Strings::Between("$line ","$field:"," ");
+	if(Strings::EndsWith($val,'cm'))$rtn = between(Strings::Before($val,'cm'),150,193);
+	if(Strings::EndsWith($val,'in'))$rtn = between(Strings::Before($val,'in'),59,79);
+
+	if($dbg==$field)INFO(__METHOD__." $line $field = $val = ".Strings::Human($rtn));
+	return $rtn;
+}
+
+function hclIsValid($line,$field){
+	GLOBAL $dbg;
+	$rtn = true;
+	$val = Strings::Between("$line ","$field:#"," ");
+	if(!preg_match('/^[a-f0-9]/',$val) || strlen($val)!=6)$rtn = false;
+
+	if($dbg==$field)INFO(__METHOD__." $line $field = $val = ".Strings::Human($rtn));
+	return $rtn;
+}
+
+function eclIsValid($line,$field){
+	GLOBAL $dbg;
+	$rtn = false;
+	$val = Strings::Between("$line ","$field:"," ");
+	$colours = array('amb', 'blu', 'brn', 'gry', 'grn', 'hzl', 'oth');
+
+	$rtn = in_array($val,$colours);
+	if($dbg==$field)INFO(__METHOD__." $line $field = $val = ".Strings::Human($rtn));
+	return $rtn;
+}
+
+
+function pidIsValid($line,$field){
+	GLOBAL $dbg;
+	$rtn = true;
+	$val = trim(Strings::Between("$line ","$field:"," "));
+	if(!preg_match('/^[0-9]/',$val) || strlen($val)!=9)$rtn = false;
+
+	if($dbg==$field)INFO(__METHOD__." $line $field = $val = ".Strings::Human($rtn));
+	return $rtn;
+}
+
+foreach ($fields as $field) $$field = false;
+
+$idx = 0;
+$valid = 0;
+$done = false;
+while (isset($raw[$idx])){
+	$line = trim($raw[$idx]); $idx++;
+	if(Strings::isEmpty($line)){
+		if($done)$valid++;
+		//Reset State
+		foreach ($fields as $field) $$field = false;
+		continue;
+	}
+
+
+	foreach ($fields as $field) if(Strings::Contains($line, $field.":")){
+		$$field = call_user_func(__NAMESPACE__.'\\'.$field."IsValid",$line,$field);
+	}
+
+	$done = true;
+	foreach ($fields as $field) $done &= $$field;
+}
+
+INFO("Valid = $valid");
