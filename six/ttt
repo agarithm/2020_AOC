@@ -35,7 +35,7 @@ foreach($raw as $line){
 		$groups[0]["questions"] = array_merge($groups[0]["questions"], $groups[0]["individuals"][0]["questions"]);
 		$groups[0]["common"] = $groups[0]["common"] === null ? $groups[0]["individuals"][0]["questions"] : array_intersect_assoc($groups[0]["common"], $groups[0]["individuals"][0]["questions"]);
 	}else{
-		INFO ("Group = ".count($groups[0]["questions"]));
+		INFO ("Group = ".count($groups[0]["questions"])." (".count($groups[0]["common"]).")");
 		array_unshift($groups,$group);
 	}
 }
