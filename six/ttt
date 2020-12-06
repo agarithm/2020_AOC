@@ -1,0 +1,47 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+
+$raw = FILE(dirname(__FILE__)."/customs");
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+
+$ind = array("answers" => ""
+	,"questions" => array()
+);
+
+$group = array("individuals" => array()
+	,"questions" => array()
+	,"common" => null
+);
+
+$groups = array();
+array_unshift($groups,$group);
+
+foreach($raw as $line){
+	if($line = trim($line)){
+		array_unshift($groups[0]["individuals"],$ind);
+		$groups[0]["individuals"][0]["answers"] = $line;
+		for($i=0;$i<strlen($line);$i++)$groups[0]["individuals"][0]["questions"][$line[$i]] = 1;
+		$groups[0]["questions"] = array_merge($groups[0]["questions"], $groups[0]["individuals"][0]["questions"]);
+		$groups[0]["common"] = $groups[0]["common"] === null ? $groups[0]["individuals"][0]["questions"] : array_intersect_assoc($groups[0]["common"], $groups[0]["individuals"][0]["questions"]);
+	}else{
+		INFO ("Group = ".count($groups[0]["questions"]));
+		array_unshift($groups,$group);
+	}
+}
+
+
+$total = array_reduce($groups,function($carry,$group){return $carry+count($group["questions"]);},0);
+$common = array_reduce($groups,function($carry,$group){return $carry+count($group["common"]);},0);
+INFO ("Total = ".$total);
+INFO ("Common = ".$common);

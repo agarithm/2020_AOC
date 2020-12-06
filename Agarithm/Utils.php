@@ -230,7 +230,7 @@ function REDACT($arr,$allowed=false,$remove=false){
 	//DEV SYSTEMS ARE NOT REDACTED
 	if(getenv('IS_DEV' ))return $arr;
 
-	if(!isset($mask)) $mask = __('[redacted]');
+	if(!isset($mask)) $mask = '[redacted]';
 
 	$parse_query = function($q){
 		$out = array(); //PHP7 need to supply the destination output array
