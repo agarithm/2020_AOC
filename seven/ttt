@@ -1,0 +1,57 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+
+$raw = FILE(dirname(__FILE__)."/rules");
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+$outerTemplate = "{outer} bags cont{rest}";
+$innerTemplate = "{null} {count} {inner} bag";
+
+$rules = array();
+foreach($raw as $rule){
+	$os = new Scraper();
+	$oData = $os::Scrape($rule,$outerTemplate);
+	$iData = $os::Repeat($oData['rest'],$innerTemplate);
+	$rules[$oData['outer']] = ($iData[0]['count']=='no') ? array() : $iData;
+}
+
+function holders($rules,$search){
+	$out = array();
+	foreach($rules as $outer=> $bags)foreach($bags as $bag){
+		if($search == $bag['inner']){
+			$out[$outer] = $bag['count'];
+			$out = array_merge($out,holders($rules,$outer));
+			INFO("$outer holds $search");
+		}
+	}
+	return $out;
+}
+
+$heldBy = holders($rules,'shiny gold');
+
+INFO(count($heldBy)." bags eventually hold shiny gold bags");
+
+function contains($rules,$bag){
+	$out = 1;
+	if(isset($rules[$bag])&& !empty($rules[$bag])){
+		foreach($rules[$bag] as $inner){
+			$out += empty($inner) ? 1 : ($inner['count'] * contains($rules,$inner['inner']));
+		}
+	}
+	INFO("$bag contains $out including itself");
+	return $out;
+}
+
+$inside = contains($rules,'shiny gold') - 1;
+INFO("Shiny Gold Bag Contains $inside bags");
