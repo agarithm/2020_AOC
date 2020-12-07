@@ -26,6 +26,7 @@ foreach($raw as $rule){
 	$rules[$oData['outer']] = ($iData[0]['count']=='no') ? array() : $iData;
 }
 
+
 function holders($rules,$search){
 	$out = array();
 	foreach($rules as $outer=> $bags)foreach($bags as $bag){
@@ -38,13 +39,14 @@ function holders($rules,$search){
 	return $out;
 }
 
+
 $heldBy = holders($rules,'shiny gold');
 
 INFO(count($heldBy)." bags eventually hold shiny gold bags");
 
 function contains($rules,$bag){
 	$out = 1;
-	if(isset($rules[$bag])&& !empty($rules[$bag])){
+	if(isset($rules[$bag])){
 		foreach($rules[$bag] as $inner){
 			$out += empty($inner) ? 1 : ($inner['count'] * contains($rules,$inner['inner']));
 		}
