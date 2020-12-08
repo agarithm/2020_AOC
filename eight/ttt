@@ -1,0 +1,86 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+
+$raw = FILE(dirname(__FILE__)."/op_codes");
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+function run($prog,&$pc,&$nops,&$jmps){
+	$acc = 0;
+	$visited = array();
+	$acc_hist = array();
+	for($pc=0;$pc<count($prog);){
+		INFO("PC = $pc, ACC = $acc");
+		$delta = 0;
+		$jmp = 1;
+
+		$line = trim($prog[$pc]);
+		list($op,$val) = explode(' ',$line);
+		settype($val,'integer');
+
+		switch ($op){
+		case "acc":
+			$delta = $val;
+			break;
+		case "jmp":
+			$jmp = $val;
+			array_push($jmps,$pc);
+			break;
+		case "nop":
+			array_push($nops,$pc);
+			break;
+
+		}
+
+		//Do the things
+		array_push($acc_hist,$acc);
+		$acc += $delta;
+		$visited[$pc] = $acc;
+		$pc += $jmp;
+		if(isset($visited[$pc]))break;
+	}
+	INFO("LAST GOOD ACC = ".array_pop($acc_hist));
+	return $acc;
+}
+
+
+$prog = $raw;
+$nops = array();
+$jmps = array();
+$pc = 0;
+$acc = 0;
+$acc = run($prog,$pc,$nops,$jmps);
+
+while($pc < count($raw) &&  $nop_pc = array_pop($jmps)){
+	//try changing jmps to nops
+	$pc=0;
+	$prog = $raw;
+	$prog[$nop_pc] = Strings::ReplaceAll('jmp','nop',$prog[$nop_pc]);
+	$dc_nops = array();
+	$dc_jmps = array();
+	$acc = run($prog,$pc,$dc_nops,$dc_jmps);
+}
+
+while($pc < count($raw) &&  $jmp_pc = array_pop($nops)){
+	//try changing nops to jmps
+	$pc=0;
+	$prog = $raw;
+	$prog[$jmp_pc] = Strings::ReplaceAll('nop','jmp',$prog[$jmp_pc]);
+	$dc_nops = array();
+	$dc_jmps = array();
+	$acc = run($prog,$pc,$dc_nops,$dc_jmps);
+}
+
+if($pc < count($raw))ERROR("Unable to find a solution");
+else INFO("ACC = $acc");
+
