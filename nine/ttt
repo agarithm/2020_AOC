@@ -1,0 +1,68 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+
+$raw = FILE(dirname(__FILE__)."/encrypted");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+$chunk = array();
+for($i=0;$i<count($raw);$i++){
+	$found = true;
+	$key = "$raw[$i]i";
+	$sum = $raw[$i];
+	while(count($chunk)>25)array_shift($chunk);
+
+	if($i>=25){
+		$found = false;
+		//Find pairs in chunk that match sum
+		foreach($chunk as $cKey => $val){
+			$bKey = $sum - (int)$cKey;
+			if($bKey."i"==$cKey)continue;
+			if(isset($chunk[$bKey."i"])){
+				INFO("$cKey + $bKey = $sum");
+				$found = true;
+				break;
+			}
+		}
+	}
+
+	if(!$found)break;
+	$chunk["$key"] = $sum;
+}
+
+INFO(PHP_EOL.RenderTextArray($chunk));
+INFO("Not a Sum = ".$raw[$i]);
+
+$target = $raw[$i];
+$sum = 0;
+
+$stack = array();
+foreach($raw as $i => $val){
+	array_push($stack,$val);
+	while(($sum = array_reduce($stack,function($c,$item){return $c+$item;}))>$target)array_shift($stack);
+	if($sum==$target)break;
+}
+
+INFO(PHP_EOL.RenderTextArray($stack));
+INFO("SUM = $sum");
+
+sort($stack);
+
+$first = array_shift($stack);
+$last = array_pop($stack);
+$weakness = $first+$last;
+
+INFO("$first + $last = $weakness");
+
+
