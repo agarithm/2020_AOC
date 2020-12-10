@@ -1,0 +1,64 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/jolts");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+
+sort($raw,SORT_NUMERIC);
+
+$jolts = 0;
+$diffs = array(0,0,0,1);
+for($i=0;$i<count($raw);$i++) {
+	$diff = $raw[$i] - $jolts;
+	$diffs[$diff] += 1;
+	$jolts += $diff;
+}
+$maxJolts = $jolts+3;
+
+INFO(PHP_EOL.RenderTextArray($diffs,$diffs));
+$answer = $diffs[1] *$diffs[3];
+INFO("Answer: $answer");
+
+
+$jolts = array('0 x'=>0);
+foreach($raw as $jolt)$jolts["$jolt x"] = $jolt;
+
+$jolts["$maxJolts x"] = $maxJolts;
+
+
+arsort($jolts);
+
+INFO(PHP_EOL.RenderTextArray($jolts));
+function countPaths($jolts,$jolt){
+	$cacheKey = "k $jolt k";
+	if($out = Memo::Get($cacheKey)){
+		INFO("CACHE HIT ($cacheKey):  $jolt = $out");
+	}else{
+		$out = 0;
+		for($i=1;$i<=3;$i++){
+			if(isset($jolts[($jolt-$i)." x"]))$out += countPaths($jolts,$jolt-$i);
+		}
+		$out = max(1,$out);
+		$out = Memo::Set($cacheKey,$out);
+		INFO("CACHE MISS ($cacheKey): $jolt = $out");
+	}
+	return $out;
+}
+
+$paths = countPaths($jolts,$maxJolts);
+
+INFO("Paths: $paths");
