@@ -1,0 +1,163 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/seats");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+class seat {
+	public $filled = false;
+	public $floor = false;
+	public $row = 0;
+	public $col = 0;
+
+	public function neighbors(){
+		global $seats;
+		//return an array of the neighboring seats
+		$out = array();
+		for($r = $this->row-1; $r<=$this->row+1; $r++){
+			for($c = $this->col-1; $c<=$this->col+1; $c++){
+				if($c==$this->col && $r==$this->row)continue;
+				if(isset($seats[$r][$c]) && ! $seats[$r][$c]->floor )$out[] = clone $seats[$r][$c];
+			}
+		}
+		return $out;
+	}
+
+	public function adjacents(){
+		global $seats;
+		$out = array();
+		$directions = [[-1,-1],[-1,0],[-1,1]
+			,[0,-1],[0,1]
+			,[1,-1],[1,0],[1,1]];
+		foreach($directions as $vec){
+			$scale = 1;
+			$found = false;
+			$r = $this->row + ($scale * $vec[0]);
+			$c = $this->col + ($scale * $vec[1]);
+			while(!$found && isset($seats[$r][$c])){
+				if(isset($seats[$r][$c]) && ! $seats[$r][$c]->floor ){
+					$out[] = clone $seats[$r][$c];
+					$found = true;
+				}
+				$scale++;
+				$r = $this->row + ($scale * $vec[0]);
+				$c = $this->col + ($scale * $vec[1]);
+			}
+
+		}
+		return $out;
+
+	}
+
+	public function occupied_neighbors(){
+		return array_reduce($this->neighbors(), function($c,$i){return $i->filled ? $c+1 : $c;},0);
+	}
+
+	public function occupied_adjacents(){
+		return array_reduce($this->adjacents(), function($c,$i){return $i->filled ? $c+1 : $c;},0);
+	}
+
+	function __construct($row,$col,$val){
+		$this->row = $row;
+		$this->col = $col;
+		$this->floor = $val == '.' ? true : false;
+		$this->filled = $val == '#' ? true : false;
+	}
+
+	function __tostring(){
+		if($this->floor)return ".";
+		if($this->filled)return "#";
+		return "L";
+	}
+
+}
+
+function print_seats($seats){
+	$out = PHP_EOL;
+	foreach($seats as $row => $layout){
+		foreach($layout as $col => $seat)  $out .= $seat;
+		$out .= PHP_EOL;
+	}
+	$out .= PHP_EOL;
+	return $out;
+}
+
+function seated($seats){
+	$out = 0;
+	$arena = Strings::Trim(print_seats($seats));
+	for($i=0;$i<strlen($arena);$i++)$out += $arena[$i]=='#' ? 1 : 0;
+	return $out;
+}
+
+function shuffle($seats,$tolerance=4,$method = 'occupied_neighbors'){
+	$filled = function ($r,$c){ return new seat($r,$c,'#');};
+	$avail = function ($r,$c){ return new seat($r,$c,'L');};
+
+	$out = array();
+	foreach($seats as $row => $layout)foreach($layout as $col => $seat){
+		if($col==0)$out[$row] = array();
+		switch("$seat"){
+		case "#":
+			if($seat->$method()<$tolerance)$out[$row][$col] = $filled($row,$col);
+			else $out[$row][$col] = $avail($row,$col);
+			break;
+		case "L":
+			if($seat->$method()==0)$out[$row][$col] = $filled($row,$col);
+			else $out[$row][$col] = $avail($row,$col);
+			break;
+		default:
+			$out[$row][$col] = clone $seat;
+			break;
+		}
+	}
+	return $out;
+}
+
+
+
+
+$seats = array();
+foreach($raw as $row => $layout)for($col=0; $col<strlen($layout); $col++){
+	if($col==0)$seats[] = array();
+	$seats[$row][$col] = new seat($row, $col, $layout[$col]);
+}
+
+$state = "";
+while (!Strings::Same($state,Strings::Trim(print_seats($seats)))){
+	$state = Strings::Trim(print_seats($seats));
+	INFO( print_seats($seats));
+	$seats = shuffle($seats);
+}
+
+INFo("Seated = ".seated($seats));
+
+
+
+$seats = array();
+foreach($raw as $row => $layout)for($col=0; $col<strlen($layout); $col++){
+	if($col==0)$seats[] = array();
+	$seats[$row][$col] = new seat($row, $col, $layout[$col]);
+}
+
+$state = "";
+while (!Strings::Same($state,Strings::Trim(print_seats($seats)))){
+	$state = Strings::Trim(print_seats($seats));
+	INFO( print_seats($seats));
+	$seats = shuffle($seats,5,'occupied_adjacents');
+}
+
+INFo("Seated = ".seated($seats));
+
