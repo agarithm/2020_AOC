@@ -48,7 +48,7 @@ class seat {
 			$r = $this->row + ($scale * $vec[0]);
 			$c = $this->col + ($scale * $vec[1]);
 			while(!$found && isset($seats[$r][$c])){
-				if(isset($seats[$r][$c]) && ! $seats[$r][$c]->floor ){
+				if(! $seats[$r][$c]->floor ){
 					$out[] = clone $seats[$r][$c];
 					$found = true;
 				}
