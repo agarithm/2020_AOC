@@ -50,17 +50,11 @@ while($bus = Strings::Before($sched,',',$sched)){
 
 
 
-$periods[$sequence[0]] = $sequence[0];
-$start = $sequence[0];
-$seen= array();
-
-reset:
 
 $done= false;
-$now = $start;
-$step = max($periods);
-
-INFO("Period of $step starts at $now");
+$step = $now = $sequence[0];
+$seen= array();
+$periods = array();
 while(!$done){
 	$done = true;
 	foreach($sequence as $offset => $bus){
@@ -68,15 +62,14 @@ while(!$done){
 			$done = false;
 			break;
 		}else{
-			if(count($seen) < count($sequence)){
+			if(count($periods) < count($sequence)){
 				if(!isset($seen[$bus])){
 					$seen[$bus] = $now;
 				}else{
-					$period = $now - $seen[$bus];
 					if(!isset($periods[$bus])){
-						$periods[$bus]=$period;
-						if(max($periods)==$period)$start = $now;
-						goto reset;
+						$periods[$bus]=$now - $seen[$bus];
+						$step = max($periods);
+						INFO("Period of $step starts for bus $bus");
 					}
 				}
 			}
