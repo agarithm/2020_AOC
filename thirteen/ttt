@@ -1,0 +1,88 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/busses");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+$now = $raw[0];
+$sched = $raw[1];
+
+while($bus = Strings::Before($sched,',',$sched)){
+	if($bus > 0){
+		$busses[$bus] = $bus - ($now % $bus);
+	}
+	$sched = Strings::After($sched,',');
+}
+
+
+asort($busses);
+
+$next_bus = array_keys($busses);
+
+INFO("Next Bus = ".$next_bus[0]);
+INFO("Answer = ".$next_bus[0]*$busses[$next_bus[0]]);
+
+
+$sequence = array();
+$index = 0;
+$sched = $raw[1];
+while($bus = Strings::Before($sched,',',$sched)){
+	if($bus > 0){
+		$sequence[$index] = $bus;
+	}
+	$index++;
+	$sched = Strings::After($sched,',');
+}
+
+
+
+
+$periods[$sequence[0]] = $sequence[0];
+$start = $sequence[0];
+$seen= array();
+
+reset:
+
+$done= false;
+$now = $start;
+$step = max($periods);
+
+INFO("Period of $step starts at $now");
+while(!$done){
+	$done = true;
+	foreach($sequence as $offset => $bus){
+		if(($now+$offset)%$bus != 0){
+			$done = false;
+			break;
+		}else{
+			if(count($seen) < count($sequence)){
+				if(!isset($seen[$bus])){
+					$seen[$bus] = $now;
+				}else{
+					$period = $now - $seen[$bus];
+					if(!isset($periods[$bus])){
+						$periods[$bus]=$period;
+						if(max($periods)==$period)$start = $now;
+						goto reset;
+					}
+				}
+			}
+		}
+	}
+	if(!$done)$now += $step;
+}
+
+INFO("Departure = ".$now);
