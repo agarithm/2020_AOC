@@ -326,7 +326,7 @@ function RenderTextArray($arr,$name='array',$allow=array()){return doRenderArray
 
 function doRenderArray($arr,$name="array"){
 	//Handy little tool for debuggin & displaying multi dimensional arrays / objects
-	$out = "";
+	$out = "\n";
 
 	$prefix = function(&$key)use(&$arr){return is_array($arr) ? "[".$key."]" : "->$key" ;};
 

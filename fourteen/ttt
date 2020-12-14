@@ -1,0 +1,85 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/dock");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+
+$orMask = '';
+$andMask = '';
+$ram = array();
+foreach($raw as $line){
+	if(Strings::StartsWith($line,"mask")){
+		$val = Strings::After($line,"= ");
+		$orMask = '';
+		$andMask = '';
+		for($i=0; $i<strlen($val); $i++){
+			$orMask .= $val[$i] == "1" ? '1' : '0';
+			$andMask .= $val[$i] == "0" ? '0' : '1';
+		}
+		$orMask = bindec($orMask);
+		$andMask = bindec($andMask);
+	}else{
+		$val = Scraper::Scrape($line,"{null}[{addr}] = {data}");
+		$addr = $val['addr'];
+		$data = (int)$val['data'];
+		$ram[$addr] = ($data & $andMask) | $orMask;
+	}
+}
+
+
+$sum = array_reduce($ram,function($c,$x){return $c + $x;});
+INFO("Sum = $sum");
+
+function WRITER($data,$addr,$ooofMask) {
+	global $ram;
+	$orMask  = '000000000000000000000000000000000000';
+	$andMask = '111111111111111111111111111111111111';
+	if(Strings::Contains($ooofMask,'1')){
+		$pos = strpos($ooofMask,'1');
+		$ooofMask[$pos]=0;
+		$andMask[$pos]=0;
+		$orMask[$pos]=1;
+		WRITER($data,$addr&bindec($andMask),$ooofMask);
+		WRITER($data,$addr|bindec($orMask),$ooofMask);
+	}else{
+		$ram[$addr]=$data;
+	}
+}
+
+$orMask = '';
+$ooofMask = '';
+$ram = array();
+foreach($raw as $line){
+	if(Strings::StartsWith($line,"mask")){
+		$val = Strings::After($line,"= ");
+		$orMask = '';
+		$ooofMask = '';
+		for($i=0; $i<strlen($val); $i++){
+			$orMask .= $val[$i] == "1" ? '1' : '0';
+			$ooofMask .= $val[$i] == "X" ? '1' : '0';
+		}
+	}else{
+		$val = Scraper::Scrape($line,"{null}[{addr}] = {data}");
+		$addr = (int)$val['addr'];
+		$data = (int)$val['data'];
+		WRITER($data,$addr|bindec($orMask),$ooofMask);
+	}
+}
+INFO(RenderTextArray($ram));
+
+$sum = array_reduce($ram,function($c,$x){return $c + $x;});
+INFO("Sum = $sum");
