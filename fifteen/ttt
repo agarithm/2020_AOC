@@ -1,0 +1,39 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/seed");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+$seed = explode(',',$raw[0]);
+
+$spoken = array();
+foreach($seed as $idx => $val)$spoken[$val] = $idx+1;
+
+$start = count($seed)+1;
+$end = 30000000;
+$utterence = 0;
+for($i=$start; $i<=$end ; $i++){
+	if(isset($spoken[$utterence])){
+		$nextUtterence = $i - $spoken[$utterence];
+		$spoken[$utterence] = $i;
+	}else{
+		$nextUtterence = 0;
+		$spoken[$utterence] = $i;
+	}
+	$utterence = $nextUtterence;
+}
+
+INFO("Utterence = ".FIND_KEY_BY_VALUE($spoken,"$end"));
