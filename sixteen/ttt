@@ -97,6 +97,7 @@ while($counter-->0 && !empty($rules)){
 			foreach($rules as &$r){
 				$r['flags'] = Strings::ReplaceAll(",".$flags[0].",",",",$r['flags']);
 			}
+			//foreach loop is invalid as we've unset the iterable.
 			break;
 		}
 	}
