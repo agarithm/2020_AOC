@@ -1,0 +1,113 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/rules");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	settype($min,'integer');
+	settype($max,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+
+$rules = array();
+foreach($raw as $line){
+	if(empty($line))break;
+	$rule = Scraper::Scrape($line,"{rule}: {a_min}-{a_max} or {b_min}-{b_max}");
+	$rules[] = $rule;
+}
+
+$tickets = array();
+$tickets[] = $raw[count($rules)+2];
+INFO("My Ticket: $tickets[0]");
+
+$flags = ",";
+for($i = 0;$i <count(explode(',',$tickets[0])) ; $i++)$flags .= "$i,";
+foreach($rules as $i=>$rule)$rules[$i]['flags'] = $flags;
+
+
+
+$start = count($rules)+5;
+$errors = array();
+for($i=$start; $i<count($raw); $i++){
+	$line = $raw[$i];
+	$values = explode(',',$line);
+	$error = false;
+	foreach($values as $val){
+		$valid = 0;
+		foreach($rules as $rule){
+			$valid |= between($val,$rule['a_min'],$rule['a_max']);
+			$valid |= between($val,$rule['b_min'],$rule['b_max']);
+			if($valid)break;
+		}
+		if(!$valid){
+			$errors[] = $val;
+			$error = true;
+		}
+	}
+	if(!$error)$tickets[] = $line;
+}
+
+INFO("Scanning Error Rate: ".array_sum($errors));
+
+foreach ($tickets as $ticket)foreach(explode(',',$ticket) as $pos => $val){
+	$validRules = array();
+	foreach($rules as $rid => $rule){
+		$valid = 0;
+		$valid += between($val,$rule['a_min'],$rule['a_max']) ? 1 : 0;
+		$valid += between($val,$rule['b_min'],$rule['b_max']) ? 1 : 0;
+
+		if(!$valid){
+			$rules[$rid]['flags'] = Strings::ReplaceAll(",$pos,",",",$rule['flags']);
+			INFO("$ticket");
+			INFO($rule['rule']." is not in $pos $rid");
+		}else{
+			$validRules[] = $rid;
+		}
+	}
+}
+
+
+INFO(RenderTextArray($rules,"unresolved"));
+//mutually exclusive
+$resolved = array();
+$counter = 100;
+while($counter-->0 && !empty($rules)){
+	foreach($rules as $rid => $rule){
+		$flags = explode(',',$rule["flags"]);
+		array_shift($flags);
+		array_pop($flags);
+		if(count($flags)==1){
+			//Only one position, so this is resolved
+			INFO("Only One Pos with this Rule ".$flags[0]);
+			$resolved[] = $rule;
+			unset($rules[$rid]);
+
+			//clear this pos from all other rules
+			foreach($rules as &$r){
+				$r['flags'] = Strings::ReplaceAll(",".$flags[0].",",",",$r['flags']);
+			}
+			break;
+		}
+	}
+}
+INFO(RenderTextArray($resolved,"resolved"));
+INFO(RenderTextArray($rules,"unresolved"));
+
+$my_ticket = explode(",",$tickets[0]);
+$answer = 1;
+foreach ($resolved as $rule){
+	$pos = (int)Strings::ReplaceAll(",","",$rule['flags']);
+	if(Strings::StartsWith($rule['rule'],'departure'))$answer *= $my_ticket[$pos];
+}
+INFO("Answer = $answer");
