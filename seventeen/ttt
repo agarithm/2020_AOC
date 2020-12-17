@@ -1,0 +1,328 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/pd");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+class cell {
+	public $active = false;
+	public $x = 0;
+	public $y = 0;
+	public $z = 0;
+
+	public function neighbors(&$pd){
+		//return an array of the neighboring pd
+		$out = array();
+		for($x = $this->x-1; $x<=$this->x+1; $x++){
+			for($y = $this->y-1; $y<=$this->y+1; $y++){
+				for($z = $this->z-1; $z<=$this->z+1; $z++){
+					if($x==$this->x && $y==$this->y && $z==$this->z)continue;
+					if(isset($pd[$x][$y][$z]) && $pd[$x][$y][$z]->active )$out[] = clone $pd[$x][$y][$z];
+				}
+			}
+		}
+		return $out;
+	}
+
+	public function adjacents(){
+		global $pd;
+		$out = array();
+		$directions = [[-1,-1],[-1,0],[-1,1]
+			,[0,-1],[0,1]
+			,[1,-1],[1,0],[1,1]];
+		foreach($directions as $vec){
+			$scale = 1;
+			$found = false;
+			$x = $this->x + ($scale * $vec[0]);
+			$y = $this->y + ($scale * $vec[1]);
+			while(!$found && isset($pd[$x][$y][$z])){
+				if(! $pd[$x][$y][$z]->floor ){
+					$out[] = clone $pd[$x][$y][$z];
+					$found = true;
+				}
+				$scale++;
+				$x = $this->x + ($scale * $vec[0]);
+				$y = $this->y + ($scale * $vec[1]);
+			}
+
+		}
+		return $out;
+	}
+
+	public function active_neighbors($pd){
+		return array_reduce($this->neighbors($pd), function($c,$i){return $i->active ? $c+1 : $c;},0);
+	}
+
+	public function active_adjacents(){
+		return array_reduce($this->adjacents(), function($c,$i){return $i->active ? $c+1 : $c;},0);
+	}
+
+	function __construct($x,$y,$z,$val='.'){
+		$this->x = $x;
+		$this->y = $y;
+		$this->z = $z;
+		$this->active = $val == '#' ? true : false;
+	}
+
+	function __tostring(){
+		return $this->active ? "#" : ".";
+	}
+
+}
+
+class pocket_dimension {
+	public $arena;
+	public $age=0;
+	public $minx=0;
+	public $maxx=0;
+	public $miny=0;
+	public $maxy=0;
+	public $minz=0;
+	public $maxz=0;
+
+	function __construct($age = 0){
+		$this->age = $age;
+		$this->arena = array();
+	}
+
+	function get($x,$y,$z){
+		foreach(array('min','max') as $what)foreach(array('x','y','z') as $s){
+			//maintain min max dimensions
+			$var = $what.$s;
+			$this->$var = call_user_func($what,$$s,$this->$var);
+		}
+
+		if(!isset($this->arena[$x]))$this->arena[$x] = array();
+		if(!isset($this->arena[$x][$y]))$this->arena[$x][$y] = array();
+		if(!isset($this->arena[$x][$y][$z]))$this->arena[$x][$y][$z] = new cell($x,$y,$z);
+		return clone $this->arena[$x][$y][$z];
+	}
+
+	function set($x,$y,$z,$cell){
+		foreach(array('min','max') as $what)foreach(array('x','y','z') as $s){
+			//maintain min max dimensions
+			$var = $what.$s;
+			$this->$var = call_user_func($what,$$s,$this->$var);
+		}
+		if(!isset($this->arena[$x]))$this->arena[$x] = array();
+		if(!isset($this->arena[$x][$y]))$this->arena[$x][$y] = array();
+		return $this->arena[$x][$y][$z] = $cell;
+	}
+
+	function __tostring(){
+		$width = -10;
+		$height = -10;
+		$out = PHP_EOL."After ".$this->age." cycles:".PHP_EOL;
+		for($z=$this->minz;$z<=$this->maxz;$z++){
+			$out .= PHP_EOL."z=$z".PHP_EOL;
+			for($x=$this->minx;$x<=$this->maxx;$x++){
+				$out .= str_pad('',$this->miny - $width,' ',STR_PAD_LEFT);
+				for($y=$this->miny;$y<=$this->maxy;$y++){
+					$cell = $this->get($x,$y,$z);
+					$out .= $cell;
+				}
+				$out .= PHP_EOL;
+			}
+			$out .= PHP_EOL;
+		}
+		$out .= PHP_EOL;
+		return $out;
+	}
+
+	function activated(){
+		$out = 0;
+		$arena = Strings::Trim($this);
+		for($i=0;$i<strlen($arena);$i++)$out += $arena[$i]=='#' ? 1 : 0;
+		return $out;
+	}
+
+	function step(){
+		$out = new pocket_dimension($this->age+1);
+
+		foreach(array('min','max') as $what)foreach(array('x','y','z') as $s){
+			//maintain min max dimensions
+			$var = $what.$s;
+			$$var = $this->$var;
+		}
+		for($x=$minx-1;$x<=$maxx+1;$x++){
+			for($y=$miny-1;$y<=$maxy+1;$y++){
+				for($z=$minz-1;$z<=$maxz+1;$z++){
+					$cell = $this->get($x,$y,$z);
+					$neighbors = $cell->active_neighbors($this->arena);
+					if($cell->active){
+						switch($neighbors){
+						case 2:
+						case 3:
+							$cell->active = true;
+							break;
+						default:
+							$cell->active = false;
+							break;
+						}
+					}elseif($neighbors==3){
+						$cell->active = true;
+					}
+					$out->set($x,$y,$z,$cell);
+				}
+			}
+		}
+		return $out;
+	}
+
+}
+
+
+
+$pd = new pocket_dimension();
+foreach($raw as $x => $layout)for($y=0; $y<strlen($layout); $y++){
+	$cell = new cell($x, $y, 0, $layout[$y]);
+	$pd->set($x,$y,0, $cell);
+}
+while($pd->age<6){
+	INFO("$pd");
+	$pd = $pd->step();
+}
+
+INFO("$pd");
+INFO("Activate = ".$pd->activated());
+
+
+
+class hyper_dimension extends pocket_dimension{
+	public $minw=0;
+	public $maxw=0;
+
+	function get($x,$y,$z,$w){
+		foreach(array('min','max') as $what)foreach(array('x','y','z','w') as $s){
+			//maintain min max dimensions
+			$var = $what.$s;
+			$this->$var = call_user_func($what,$$s,$this->$var);
+		}
+
+		if(!isset($this->arena[$w]))$this->arena[$w] = new pocket_dimension($this->age);
+		return $this->arena[$w]->get($x,$y,$z);
+	}
+
+	function set($x,$y,$z,$w,$cell){
+		foreach(array('min','max') as $what)foreach(array('x','y','z','w') as $s){
+			//maintain min max dimensions
+			$var = $what.$s;
+			$this->$var = call_user_func($what,$$s,$this->$var);
+		}
+		if(!isset($this->arena[$w]))$this->arena[$w] = new pocket_dimension($this->age);
+		return $this->arena[$w]->set($x,$y,$z,$cell);
+	}
+
+	function __tostring(){
+		$width = -10;
+		$height = -10;
+		$out = PHP_EOL."After ".$this->age." cycles:".PHP_EOL;
+		for($w=$this->minw;$w<=$this->maxw;$w++){
+			for($z=$this->minz;$z<=$this->maxz;$z++){
+				$out .= PHP_EOL."z=$z, w=$w".PHP_EOL;
+				for($x=$this->minx;$x<=$this->maxx;$x++){
+					$out .= str_pad('',$this->miny - $width,' ',STR_PAD_LEFT);
+					for($y=$this->miny;$y<=$this->maxy;$y++){
+						$cell = $this->arena[$w]->get($x,$y,$z);
+						$out .= $cell;
+					}
+					$out .= PHP_EOL;
+				}
+				$out .= PHP_EOL;
+			}
+		}
+		$out .= PHP_EOL;
+		return $out;
+	}
+
+	function activated(){
+		$out = 0;
+		$arena = Strings::Trim($this);
+		for($i=0;$i<strlen($arena);$i++)$out += $arena[$i]=='#' ? 1 : 0;
+		return $out;
+	}
+
+
+	function active_neighbors($x,$y,$z,$w){
+		$out = 0;
+		for($i=$w-1;$i<=$w+1;$i++){
+			if(isset($this->arena[$i])){
+				$pd = $this->arena[$i];
+				$arena = $pd->arena;
+				$cell = $pd->get($x,$y,$z);
+				$out += $cell->active_neighbors($arena);
+
+				//26*3 = 78, problem text says 80 cells... so we need to use the centre cells when not in our own w plane ?
+				//
+				if($i!=$w)$out += $cell->active ? 1 : 0;
+			}
+		}
+
+		return $out;
+
+	}
+
+	function step(){
+		$out = new hyper_dimension($this->age+1);
+
+		foreach(array('min','max') as $what)foreach(array('x','y','z','w') as $s){
+			//maintain min max dimensions
+			$var = $what.$s;
+			$$var = $this->$var;
+		}
+		for($x=$minx-1;$x<=$maxx+1;$x++){
+			for($y=$miny-1;$y<=$maxy+1;$y++){
+				for($z=$minz-1;$z<=$maxz+1;$z++){
+					for($w=$minw-1;$w<=$maxw+1;$w++){
+						$cell = $this->get($x,$y,$z,$w);
+						$neighbors = $this->active_neighbors($x, $y, $z, $w);
+						if($cell->active){
+							switch($neighbors){
+							case 2:
+							case 3:
+								$cell->active = true;
+								break;
+							default:
+								$cell->active = false;
+								break;
+							}
+						}elseif($neighbors==3){
+							$cell->active = true;
+						}
+						$out->set($x,$y,$z,$w,$cell);
+					}
+				}
+			}
+		}
+		return $out;
+	}
+
+
+}
+
+$hd = new hyper_dimension();
+foreach($raw as $x => $layout)for($y=0; $y<strlen($layout); $y++){
+	$cell = new cell($x, $y, 0, $layout[$y]);
+	$hd->set($x,$y,0,0, $cell);
+}
+while($hd->age<6){
+	INFO("$hd");
+	$hd = $hd->step();
+}
+
+INFO("$hd");
+INFO("Activated = ".$hd->activated());
+
