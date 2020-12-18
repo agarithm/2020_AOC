@@ -1,0 +1,78 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+
+$raw = FILE(dirname(__FILE__)."/homework");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+
+function evaluate($line){
+	$parts = explode(" ",$line);
+	$lhs = $parts[0];
+	for($i=2;$i<count($parts); $i+=2){
+		$op = $parts[$i-1];
+		$rhs = $parts[$i];
+		switch($op){
+		case '+':
+			$lhs += $rhs;
+			break;
+		case '*':
+			$lhs *= $rhs;
+			break;
+		}
+	}
+	INFO("$line = $lhs");
+	return $lhs;
+}
+
+
+
+$answers = array();
+foreach($raw as $i => $line){
+	while(Strings::Contains($line,'(')){
+		$inside = Strings::BetweenNested($line,'(',')');
+		$replace = "($inside)";
+		$value = evaluate($inside);
+		$line = Strings::ReplaceAll($replace, $value, $line);
+	}
+	$answers[$i] = evaluate($line);
+}
+
+INFO("SUM of Answers = " . array_sum($answers));
+
+function evaluate2($line){
+	while(Strings::Contains($line,"+")){
+		$lhs = Strings::Before($line," + ");
+		$lhs = Strings::AfterLast($lhs," ",$lhs);
+		$rhs = Strings::After($line," + ");
+		$rhs = Strings::Before($rhs," ",$rhs);
+		$value = evaluate("$lhs + $rhs");
+		$line = Strings::ReplaceAll("$lhs + $rhs",$value,$line);
+	}
+	return evaluate($line);
+}
+
+
+
+$answers2 = array();
+foreach($raw as $i => $line){
+	while(Strings::Contains($line,'(')){
+		$inside = Strings::BetweenNested($line,'(',')');
+		$replace = "($inside)";
+		$value = evaluate2($inside);
+		$line = Strings::ReplaceAll($replace, $value, $line);
+	}
+	$answers2[$i] = evaluate2($line);
+}
+
+INFO("SUM of Answers 2 = " . array_sum($answers2));
