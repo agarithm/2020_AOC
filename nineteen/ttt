@@ -1,0 +1,134 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/dump");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+$rules = array();
+foreach($raw as $line){
+	if(!empty($input = Scraper::Scrape($line,"{id}: {rule}"))){
+		$rule = array();
+		while(isset($input['rule']) && $pattern = Strings::Before($input['rule']," | ",$input['rule'])){
+			$rule[] = trim(Strings::ReplaceAll('"','',$pattern));
+			$input['rule'] = Strings::After($input['rule']," | ");
+		}
+		$rules[$input['id']] = $rule;
+	}else{
+		break;
+	}
+}
+INFO(RenderTextArray($rules));
+
+
+function colapse($chunks,$prefix='',$maxLen=0){
+	$found = function($chunk){
+		global $raw;
+		static $search = null;
+		if(!$search)$search = "1,".implode(",",$raw);
+		$rtn = Memo::Get($chunk);
+
+		if($rtn ===null ){
+			$rtn = Memo::Set($chunk,Strings::Contains($search,$chunk));
+		}
+		return $rtn;
+	};
+
+	$cacheKey = md5(json_encode(func_get_args()));
+	if(!$out = Memo::Get($cacheKey)){
+		$out = array($prefix);
+		foreach($chunks as $chunk){
+			if(is_array($chunk)){
+				$new_out = array();
+				foreach($out as $prefix)foreach($chunk as $suffix){
+					if($maxLen && strlen($prefix.$suffix)<=$maxLen){
+						$new_out[] = $prefix.$suffix;
+					}elseif(!$maxLen){
+						$new_out[] = $prefix.$suffix;
+					}
+				}
+				$out = $new_out;
+			}else{
+				$out = array_map(function($c)use($chunk){ return $c.$chunk; },$out);
+			}
+		}
+		foreach($out as $i => $chunk){
+			//Remove chunks larger than our biggest input string
+			if($maxLen && strlen($chunk)>$maxLen)unset($out[$i]);
+			//remove chunks that don't match any part of any input string.
+			elseif(!$found($chunk))unset($out[$i]);
+		}
+		Memo::Set($cacheKey,$out);
+	}
+	return $out;
+}
+
+function expand($rule,$rules,$len=0,$maxLen=0){
+	INFO(__METHOD__." $rule $len $maxLen");
+	$out = array();
+	if($len<=$maxLen){
+		foreach($rules[$rule] as $pattern){
+			$parts = explode(" ",$pattern);
+			$chunks = array();
+			foreach($parts as $i => $part){
+				if(is_numeric($part))$chunks[$i] = $maxLen ? expand($part,$rules,$len+$i+1,$maxLen) : expand($part,$rules);
+				else $chunks[$i] = $part;
+			}
+			$out = array_merge($out,colapse($chunks,'',$maxLen));
+		}
+	}
+	return $out;
+}
+
+
+$match = expand('0',$rules);
+INFO(RenderTextArray($match,"match"));
+
+
+$valid = 0;
+$maxLen = 0;
+for($i=count($rules);$i<count($raw);$i++){
+	$line = $raw[$i];
+	$maxLen = max($maxLen,strlen($line));
+	if(in_array($line,$match)){
+		$valid++;
+		INFO("FOUND:     $line");
+	}else{
+		INFO("NOT FOUND: $line");
+	}
+}
+
+INFO("Matches for Rule 0 = ".$valid);
+
+Memo::Clear();
+$rules[8] = array("42","42 8");
+$rules[11] = array("42 31","42 11 31");
+
+$match = expand('0',$rules,0,$maxLen);
+INFO(RenderTextArray($match,"match"));
+
+$valid = 0;
+for($i=count($rules);$i<count($raw);$i++){
+	$line = $raw[$i];
+	if(in_array($line,$match)){
+		$valid++;
+		INFO("FOUND:     $line");
+	}else{
+		INFO("NOT FOUND: $line");
+	}
+}
+
+INFO("Matches for Rule 0 = ".$valid);
+
