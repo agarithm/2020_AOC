@@ -103,6 +103,12 @@ class Strings {
 		return trim(preg_replace('/\s+/', ' ',$haystack));
 	}
 
+	public static function toArray($haystack){
+		$out = array();
+		for($i=0;$i<mb_strlen($haystack);$i++)$out[$i] = mb_substr($haystack,$i,1);
+		return $out;
+	}
+
 	public static function toNumber($haystack){
 		$haystack = static::Trim($haystack);
 		$sign = static::StartsWith($haystack,'-') ? -1 : 1;

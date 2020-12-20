@@ -1,0 +1,457 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/tiles");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+class tile {
+	public $id;
+	public $data;
+	public $edges;
+	public $neighbors;
+	public $transformed;
+
+	public function __construct($id,$data){
+		$this->transformed = false;
+		$this->id = $id;
+		$this->data = $data;
+		$this->neighbors = array();
+		$this->buildEdgeIndex();
+	}
+
+	function buildEdgeIndex(){
+		$this->edges = array();
+		$this->edges['top'] = $this->data[0];
+		$this->edges['bottom'] = strrev($this->data[count($this->data)-1]);
+		$this->edges['left'] = $this->edges['right'] = "";
+		foreach($this->data as $line){
+			$this->edges['left'] .= $line[0];
+			$this->edges['right'] .= $line[strlen($line)-1];
+		}
+		$this->edges['left'] = strrev($this->edges['left']);
+		$reversed = array();
+		foreach($this->edges as $side => $edge){
+			$key = "r$side";
+			$reversed[$key] = strrev($edge);
+		}
+		$this->edges += $reversed;
+	}
+
+	function add_neighbor($side,$id){
+		$n = array_values($this->neighbors);
+		if(!in_array($id,$n))$this->neighbors[$side] = $id;
+	}
+
+	function flip(){
+		foreach($this->data as $i => $line)$this->data[$i] = strrev($line);
+		$this->buildEdgeIndex();
+
+		//transform Neighbor Index too
+		$new_neighbors = array();
+		foreach($this->neighbors as $side => $nile_id){
+			switch($side){
+			case 'top':
+				$new_neighbors['rtop'] = $nile_id;
+				break;
+			case 'rtop':
+				$new_neighbors['top'] = $nile_id;
+				break;
+			case 'bottom':
+				$new_neighbors['rbottom'] = $nile_id;
+				break;
+			case 'rbottom':
+				$new_neighbors['bottom'] = $nile_id;
+				break;
+			case 'left':
+				$new_neighbors['rright'] = $nile_id;
+				break;
+			case 'rleft':
+				$new_neighbors['right'] = $nile_id;
+				break;
+			case 'right':
+				$new_neighbors['rleft'] = $nile_id;
+				break;
+			case 'rright':
+				$new_neighbors['left'] = $nile_id;
+				break;
+			}
+		}
+		$this->neighbors = $new_neighbors;
+	}
+
+	function rotate(){
+
+		$maxx = count($this->data);
+		$maxy = strlen($this->data[0]);
+		$new_data = array();
+		//transpose
+		for($x=0;$x<$maxx;$x++)for($y=0;$y<$maxy;$y++){
+			if(!isset($new_data[$y]))$new_data[$y] = '';
+			$new_data[$y].=$this->data[$x][$y];
+		}
+		$this->data = $new_data;
+
+		$this->buildEdgeIndex();
+
+		//transform Neighbor Index too
+		$new_neighbors = array();
+		foreach($this->neighbors as $side => $nile_id){
+			switch($side){
+			case 'top':
+				$new_neighbors['rleft'] = $nile_id;
+				break;
+			case 'rtop':
+				$new_neighbors['left'] = $nile_id;
+				break;
+			case 'bottom':
+				$new_neighbors['rright'] = $nile_id;
+				break;
+			case 'rbottom':
+				$new_neighbors['right'] = $nile_id;
+				break;
+			case 'left':
+				$new_neighbors['rtop'] = $nile_id;
+				break;
+			case 'rleft':
+				$new_neighbors['top'] = $nile_id;
+				break;
+			case 'right':
+				$new_neighbors['rbottom'] = $nile_id;
+				break;
+			case 'rright':
+				$new_neighbors['bottom'] = $nile_id;
+				break;
+			}
+		}
+		$this->neighbors = $new_neighbors;
+
+		//now flip
+		$this->flip();
+
+	}
+
+	function place($nile_id,$side){
+		//Put nile on specified side
+		$current_side = FIND_KEY_BY_VALUE($this->neighbors,$nile_id);
+		INFO(__METHOD__." put $nile_id on $side ");
+		INFO(__METHOD__." Current side    $current_side ");
+		if(Strings::Same($current_side,$side)){
+			return;
+		}
+		//Put NILE on TOP
+		switch($current_side){
+		case 'rtop':
+			$this->flip();
+			//fall thru
+		case 'top':
+			break;
+		case 'rbottom':
+			$this->flip();
+			//fall thru
+		case 'bottom':
+			$this->rotate();
+			$this->rotate();
+			break;
+		case 'rleft':
+			$this->flip();
+			//fall thru
+		case 'right':
+			$this->rotate();
+			$this->rotate();
+			$this->rotate();
+			break;
+		case 'rright':
+			$this->flip();
+			//fall thru
+		case 'left':
+			$this->rotate();
+			break;
+
+			break;
+		}
+		$current_side = FIND_KEY_BY_VALUE($this->neighbors,$nile_id);
+		INFO(__METHOD__." Current side    $current_side ");
+		if($current_side != 'top')FATAL(__METHOD__." did not place it on top");
+
+		//target nile is set to top position, now place it where we need it
+		switch($side){
+		case 'rtop':
+			$this->flip();
+			//fall thru
+		case 'top':
+			break;
+		case 'rbottom':
+			$this->flip();
+			//fall thru
+		case 'bottom':
+			$this->rotate();
+			$this->rotate();
+			break;
+		case 'rleft':
+			$this->flip();
+			//fall thru
+		case 'left':
+			$this->rotate();
+			$this->rotate();
+			$this->rotate();
+			break;
+		case 'rright':
+			$this->flip();
+			//fall thru
+		case 'right':
+			$this->rotate();
+			break;
+
+		}
+		$current_side = FIND_KEY_BY_VALUE($this->neighbors,$nile_id);
+		INFO(__METHOD__." Current side    $current_side ");
+		if($current_side != $side)FATAL(__METHOD__." did not place it on $side");
+	}
+
+	function scanlines(){
+		$out = array();
+		for($i=1;$i<(count($this->data)-1);$i++){
+			$line = $this->data[$i];
+			$line = substr($line,1);
+			$line = substr($line,0,strlen($line)-1);
+			$out[] = $line;
+		}
+		return $out;
+	}
+
+
+
+}
+
+
+//Parse the Input
+$tiles = array();
+foreach($raw as $line){
+	if(Strings::Contains($line,'Tile')){
+		$id=Strings::Between($line,' ',':');
+		$data = array();
+	}elseif(strlen($line)){
+		$data[]=$line;
+	}else{
+		$tiles[$id] = new tile($id,$data);
+	}
+}
+
+//Build Edge Index
+$edges = array();
+foreach($tiles as $tile){
+	foreach($tile->edges as $side => $edge){
+		if(!isset($edges[$edge]))$edges[$edge] = array();
+		$edges[$edge][$tile->id] = $side;
+	}
+}
+
+
+//Find and Label Tile Neighbors
+foreach($edges as $edge){
+	if(count($edge)==2){
+		$tile_ids = array_keys($edge);
+		$tiles[$tile_ids[0]]->add_neighbor($edge[$tile_ids[0]],$tile_ids[1]);
+		$tiles[$tile_ids[1]]->add_neighbor($edge[$tile_ids[1]],$tile_ids[0]);
+	}elseif(count($edge)>2){
+		FATAL("Three tiles matched".RenderTextArray($edge));
+	}
+}
+
+//Solve Part 1
+$answer = 1;
+$corner_id = 0;
+foreach($tiles as $tile){
+	if(count($tile->neighbors)==2){
+		INFO("Corner Tile ".$tile->id);
+		$answer *= $tile->id;
+		$corner_id=$tile->id;
+	}
+}
+
+INFO("Answer: $answer");
+
+//Assemble Map
+class Map {
+	public $tiles;
+	public $pixels;
+	public $data;
+	public $minx=0;
+	public $miny=0;
+	public $maxx=0;
+	public $maxy=0;
+	public $monster;
+	public $monsters = 0;
+
+	public function __construct(&$tiles,$corner_id){
+		$this->assemble($tiles,$corner_id,0,0);
+
+		for($tx = $this->minx; $tx<=$this->maxx; $tx++){
+			for($ty = $this->miny; $ty<=$this->maxy; $ty++){
+				$offset = ($ty - $this->miny)*(count($this->tiles[$tx][$ty]->data) - 2);
+				foreach($this->tiles[$tx][$ty]->scanlines() as $i => $line){
+					if(!isset($this->data[$offset+$i]))$this->data[$offset+$i]='';
+					$this->data[$offset+$i] .= $line;
+				}
+			}
+		}
+
+		$pixels = array();
+		$this->pixels = array();
+		foreach($this->data as $y => $line)$pixes[$y] = Strings::toArray($line);
+		foreach($pixes as $y => $row)foreach($row as $x => $val)$this->pixels[$x][$y] = $val;
+
+		$this->monster = array();
+		$this->monster[0] = Strings::toArray("                  # ");
+		$this->monster[1] = Strings::toArray("#    ##    ##    ###");
+		$this->monster[2] = Strings::toArray(" #  #  #  #  #  #   ");
+		foreach($this->monster as $x => $line)foreach($line as $y => $val)if($val!='#')unset($this->monster[$x][$y]);
+		$this->hunt();
+	}
+
+	public function roughness(){
+		$out = 0;
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$out += $val=='#' ? 1 : 0;
+		return $out;
+	}
+		
+	public function isMonster($x,$y){
+		$rtn = true;
+		foreach($this->monster as $mx => $line)foreach($line as $my => $val){
+			$rtn &= (isset($this->pixels[$x+$mx][$y+$my]) && $this->pixels[$x+$mx][$y+$my]=='#') ? true : false;
+		}
+		
+		//mark the monster
+		if($rtn){
+			$this->monsters++;
+			foreach($this->monster as $mx => $line)foreach($line as $my => $val)$this->pixels[$x+$mx][$y+$my]='0';
+		}
+
+		return $rtn;
+	}
+
+
+	public function flip(){
+		$new_pixels = array();
+		foreach($this->pixels as $x => $line){
+			$line = array_reduce($line,function($c,$i){return $c.$i;},'');
+			$new_pixels[$x] = Strings::toArray($line);
+		}
+		$this->pixels = $new_pixels;
+	}
+
+	public function rotate(){
+		//transpose
+		$new_pixels = array();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val){
+			if(!isset($new_pixels[$y]))$new_pixels[$y] = array();
+			$new_pixels[$y][$x] = $val;
+		}	
+		$this->pixels = $new_pixels;
+
+		$this->flip();
+	}
+
+	public function hunt(){
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+		$this->flip();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+		foreach($this->pixels as $x => $line)foreach($line as $y => $val)$this->isMonster($x,$y);
+		$this->rotate();
+	}
+
+	public function assemble(&$tiles,$tile_id,$x,$y){
+		INFO(__METHOD__." $x,$y = $tile_id");
+		foreach(['min','max'] as $what)foreach(['x','y'] as $k){
+			$var = $what.$k;
+			$this->$var = $what($this->$var,$$k);
+		}
+
+		if(!isset($this->tiles[$x]))$this->tiles[$x] = array();
+		if(isset($this->tiles[$x][$y]))return; //already there
+		$tile =& $tiles[$tile_id];
+		$this->tiles[$x][$y] = $tile;
+		foreach($tile->neighbors as $side => $nile_id){
+			$ny = $y;
+			$nx = $x;
+			$nile =& $tiles[$nile_id];
+			switch($side){
+			case 'top':
+				$ny--;
+				$nile->place($tile_id, 'rbottom');
+				break;
+			case 'bottom':
+				$ny++;
+				$nile->place($tile_id, 'rtop');
+				break;
+			case 'left':
+				$nx--;
+				$nile->place($tile_id, 'rright');
+				break;
+			case 'right':
+				$nx++;
+				$nile->place($tile_id, 'rleft');
+				break;
+
+			case 'rtop':
+				$ny--;
+				$nile->place($tile_id, 'bottom');
+				break;
+			case 'rbottom':
+				$ny++;
+				$nile->place($tile_id, 'top');
+				break;
+			case 'rleft':
+				$nx--;
+				$nile->place($tile_id, 'right');
+				break;
+			case 'rright':
+				$nx++;
+				$nile->place($tile_id, 'left');
+				break;
+			}
+			$this->assemble($tiles,$nile_id,$nx,$ny);
+		}
+	}
+
+	function __tostring(){
+		$out = '';
+		foreach($this->pixels as $x => $line){
+			foreach($line as $y => $val)$out .= $val;
+			$out.= PHP_EOL;
+		}
+		return $out;
+	}
+}
+
+$map = new Map($tiles,$corner_id);
+INFO(PHP_EOL.$map);
+INFO("Roughness = ".$map->roughness());
+
+
+
