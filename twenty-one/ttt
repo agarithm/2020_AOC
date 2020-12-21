@@ -1,0 +1,76 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/ingredients");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+$alergens = array();
+$ingredients = array();
+foreach($raw as $line){
+	$data['ingredients'] = Strings::Before($line,' (contains',$line);
+	$data['alergens'] = Strings::Between($line,'(contains ',')');
+	if(!empty($data['ingredients'])){
+		$ins = explode(" ",$data['ingredients']);
+		foreach($ins as $ingredient){
+			if(!isset($ingredients[$ingredient]))$ingredients[$ingredient] = 0;
+			$ingredients[$ingredient] += 1;
+		}
+		if(!empty($data['alergens'])){
+			$als = explode(", ",$data['alergens']);
+			foreach($als as $alergen){
+				if(isset($alergens[$alergen])){
+					//keep overlapping foods
+					$alergens[$alergen] = array_intersect($ins,$alergens[$alergen]);
+
+				}else{
+					$alergens[$alergen] = $ins;
+				}
+			}
+		}else{
+			INFO("No Alergens Listed: $line");
+		}
+	}else{
+		WARN("No ingredients! ($line)");
+	}
+}
+$safe = $ingredients;
+foreach($alergens as $alergen => $data)foreach($data as $ingredient)if(isset($safe[$ingredient]))unset($safe[$ingredient]);
+
+INFO(RenderTextArray($ingredients,"INGEREDIENTS"));
+INFO(RenderTextArray($alergens,"ALERGENS"));
+INFO(RenderTextArray($safe,"SAFE"));
+INFO("Safe Ingredient Appearances: ".array_sum($safe));
+
+$resolved = array();
+while(!empty($alergens)){
+	foreach($alergens as $alergen => $data){
+		if(count($data)==1){
+			$resolved[$alergen] = array_pop($data);
+			unset($alergens[$alergen]);
+		}
+	}
+	foreach($alergens as $alergen => $data){
+		foreach($resolved as $name => $ingredient){
+			foreach($data as $i => $maybe){
+				if(Strings::Same($maybe,$ingredient))unset($alergens[$alergen][$i]);
+			}
+		}
+	}
+}
+ksort($resolved);
+INFO(RenderTextArray($resolved,"RESOLVED"));
+INFO("Sorted List: ".implode(",",$resolved));
+
