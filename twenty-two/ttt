@@ -1,0 +1,123 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/cards");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+foreach ($raw as $line){
+	if($line){
+		if($player = Strings::Between($line,' ',':')){
+			//new player
+			$hand = "p$player";
+			$$hand = array();
+		}else{
+			array_push($$hand,$line);
+		}
+	}
+}
+INFO(RenderTextArray($p1));
+INFO(RenderTextArray($p2));
+
+while(!empty($p1) && !empty($p2)){
+	$c1 = array_shift($p1);
+	$c2 = array_shift($p2);
+	if($c1>=$c2){
+		array_push($p1,$c1,$c2);
+	}else{
+		array_push($p2,$c2,$c1);
+	}
+}
+
+
+INFO(RenderTextArray($p1));
+INFO(RenderTextArray($p2));
+$cards = $p1+$p2;
+$cards = array_reverse($cards);
+INFO(RenderTextArray($cards));
+$score = 0;
+foreach($cards as $i => $val){
+	$score += ($i+1) *$val;
+}
+INFo("Winning Hand Score = $score");
+
+
+foreach ($raw as $line){
+	if($line){
+		if($player = Strings::Between($line,' ',':')){
+			//new player
+			$hand = "p$player";
+			$$hand = array();
+		}else{
+			array_push($$hand,$line);
+		}
+	}
+}
+
+function game_p1_wins(&$p1,&$p2,$depth=1){
+	static $rounds;
+	$round = 1;
+	if(!isset($rounds)) $rounds = array();
+	if(!isset($rounds[$depth]))$rounds[$depth] = array();
+	while(!empty($p1) && !empty($p2)){
+		$key = md5(json_encode($p1).json_encode($p2));
+		if(isset($rounds[$depth][$key]))return true;
+		else $rounds[$depth][$key] = true;
+		INFO("------------------------------------");
+		INFO("Round $round of Game $depth");$round++;
+		INFO("P1 = ".implode(",",$p1));
+		INFO("P2 = ".implode(",",$p2));
+		$c1 = array_shift($p1);
+		$c2 = array_shift($p2);
+		if((count($p1)>=$c1) && count($p2)>=$c2){
+			$ps1 = $p1;
+			$ps2 = $p2;
+			while(count($ps1)>$c1)array_pop($ps1);
+			while(count($ps2)>$c2)array_pop($ps2);
+			if(game_p1_wins($ps1,$ps2,$depth+1)){
+				INFO("Player 1 Wins Round");
+				array_push($p1,$c1,$c2);
+			}else{
+				INFO("Player 2 Wins Round");
+				array_push($p2,$c2,$c1);
+			}
+		}else if($c1>=$c2){
+			INFO("Player 1 Wins Round");
+			array_push($p1,$c1,$c2);
+		}else{
+			INFO("Player 2 Wins Round");
+			array_push($p2,$c2,$c1);
+		}
+	}
+
+	$rtn = count($p1) > count($p2) ? true : false;
+	$rtn ? INFO("Player 1 Wins Game") : INFO("Player 2 Wins Game");
+
+	return $rtn;
+}
+
+game_p1_wins($p1,$p2);
+INFO(RenderTextArray($p1,'P1'));
+INFO(RenderTextArray($p2,'P2'));
+
+$cards = $p1+$p2;
+$cards = array_reverse($cards);
+INFO(RenderTextArray($cards));
+$score = 0;
+foreach($cards as $i => $val){
+	$score += ($i+1) *$val;
+}
+INFo("Winning Hand Score = $score");
+
