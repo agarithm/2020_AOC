@@ -1,0 +1,164 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/cups");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+
+$cups = $raw[0];
+
+$moves = 100;
+while($moves-->0){
+	INFO(" --- $moves --- ");
+	INFO("CUPS: $cups");
+	$cup = $cups[0];
+	$segment = substr($cups,1,3);
+	INFO("SEGMENT: $segment");
+
+	$cups = Strings::ReplaceAll($segment,'',$cups);
+	do{
+		if($target = $cup - 1){
+			if(Strings::Contains($cups,$target)){
+				INFO("DESTINATION: $target");
+				$prefix = Strings::Before($cups,$target);
+				$suffix = Strings::After($cups,$target);
+				$cups = $prefix.$target.$segment.$suffix;
+				break;//do..while
+			}
+			$cup--;
+		}else{
+			$cup=10;
+		}
+	}while(true);
+	$cup = $cups[0];
+	$cups = Strings::ReplaceAll($cup,'',$cups).$cup;
+}
+INFO($cups);
+$order = Strings::After($cups,'1').Strings::Before($cups,'1');
+INFO("ORDER: $order");
+
+
+class cup {
+	public $next=null;
+	public $val=null;
+
+	function __construct($val){
+		$this->val = $val;
+	}
+
+	function __tostring(){return $this->val;}
+
+	function print($end=10){
+		$cup = $this;
+		$out = "$cup";
+		$end--;
+		while(isset($cup->next) && $end-->0){
+			$out .= " ".$cup->next;
+			$cup = $cup->next;
+		}
+		return $out;
+	}
+
+}
+
+$cupAddrs = array();
+$head = null;
+$tail = null;
+foreach(Strings::toArray($raw[0]) as $cup){
+	$next = new cup($cup);
+	$cupAddrs["$cup"] =& $next;
+	if(!$head){
+		$head =& $next;
+		$tail =& $next;
+	}else{
+		$tail->next =& $next;
+		$tail =& $next;
+	}
+	unset($next);
+}
+foreach($cupAddrs as $val => &$cup){
+	INFO("$val -> ".$cup->next);
+}
+
+INFO("HEAD = $head, TAIL = $tail");
+for($i=10;$i<=1000000;$i++){
+	$next = new cup("$i");
+	$cupAddrs["$i"] =& $next;
+	if(!$head){
+		$head =& $next;
+		$tail =& $next;
+	}else{
+		$tail->next =& $next;
+		$tail =& $next;
+	}
+	unset($next);
+}
+
+$tail->next =& $head;
+for($i=1;$i<=20;$i++){
+	INFO($cupAddrs["$i"]." -> ".$cupAddrs["$i"]->next." ".$cupAddrs["$i"]->print());
+}
+
+$moves = 10000000;
+while($moves-->0){
+	unset($cup);
+	if($moves<100)INFO("-----------------------");
+	if($moves<100)INFO("START:  ".$head->print());
+	$segment =& $head->next;
+	unset($head->next);
+	$head->next =& $segment->next->next->next;
+	unset($segment->next->next->next);
+	$lifted = explode(' ',$segment->print());
+	if($moves<100)INFO("SEG:    ".$segment->print());
+	if($moves<100)INFO("HEAD:   ".$head->print());
+	$cup = ''.$head->print(1);
+	if($moves<100)INFO("CUP:    $cup ");
+	if($moves<100)INFO("HEAD:   ".$head->print());
+
+	$target = $cup - 1;
+	do{
+		while($target>0){
+			if(in_array($target,$lifted))$target--;
+			else break;
+		}
+		if($target<=0)$target=1000000;
+		else break;
+	}while(true);
+
+
+	if($moves<100)INFO("TARGET:  ".$cupAddrs["$target"]->print());
+	if($moves<100)INFO("HEAD:   ".$head->print());
+	$next = ''.$cupAddrs["$target"]->next;
+	$segment->next->next->next =& $cupAddrs["$next"];
+	unset($cupAddrs["$target"]->next);
+	$cupAddrs["$target"]->next =& $segment;
+
+
+	$next = ''.$head->next;
+	unset($head);
+	$head =& $cupAddrs["$next"];
+	if($moves<100)INFO("END:   ".$head->print());
+	unset($segment);
+
+	if($moves%10000==0)INFO("MOVE: $moves (".(100*(10000000-$moves)/10000000)."%)");
+
+}
+
+$one =& $cupAddrs["1"];
+$a = ''.$one->next;
+$b = ''.$one->next->next;
+INFO("A=$a B=$b == ".($a*$b));
+
