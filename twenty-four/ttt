@@ -1,0 +1,254 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+$raw = FILE(dirname(__FILE__)."/tiles");
+$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+class tile{
+	public $routes;
+	public $x;
+	public $y;
+
+	function __construct($route){
+		$this->routes = array($route);
+		for($i=0;$i<strlen($route);){
+			switch($route[$i++]){
+			case 'w':
+				$this->x += -1;
+
+				break;
+			case 'e':
+				$this->x += 1;
+				break;
+
+			case 's':
+				$this->y += -1;
+				$this->x += $route[$i++]=='e' ? 0.5 : -0.5;
+				break;
+			case 'n':
+				$this->y += 1;
+				$this->x += $route[$i++]=='e' ? 0.5 : -0.5;
+				break;
+			}
+
+		}
+		//INFO("[".$this->x.",".$this->y."] = $route");
+	}
+
+	public function X(){return $this->x;}
+	public function Y(){return $this->y;}
+
+	public function addRoute($route){
+		$this->routes[] = $route;
+	}
+
+	public function flip(){$this->routes[] = 'flip';}
+	public function color(){return count($this->routes)%2;}
+
+	public function neighborRoutes(){
+		$route = $this->routes[0];
+		$out = array();
+		$out[] = $route."e";
+		$out[] = $route."w";
+		$out[] = $route."se";
+		$out[] = $route."ne";
+		$out[] = $route."sw";
+		$out[] = $route."nw";
+		return $out;
+	}
+
+	public function neighborTiles(&$tiles){
+		$out = array();
+		foreach($this->neighborRoutes() as $route){
+			$n = new tile($route);
+			$n->flip(); //set it to white
+			$x = ''.$n->X();
+			$y = ''.$n->Y();
+			if(!isset($tiles[$x]))$tiles[$x] = array();
+			if(!isset($tiles[$x][$y]))$tiles[$x][$y] =& $n;
+			$out[] =& $tiles[$x][$y];
+			unset($n);
+		}
+		return $out;
+	}
+
+	public function neighborBlack(&$tiles){
+		$out = 0;
+		foreach($this->neighborTiles($tiles) as $tile)$out += $tile->color();
+		return $out;
+	}
+}
+
+$maxx = $maxy = $minx = $miny = 0;
+$tiles = array();
+foreach($raw as $route){
+	$tile = new tile($route);
+	$x = "".$tile->X();
+	$y = "".$tile->Y();
+	$minx = min($x,$minx);
+	$miny = min($y,$miny);
+	$maxx = max($x,$maxx);
+	$maxy = max($y,$maxy);
+	if(!isset($tiles[$x]))$tiles[$x] = array();
+	if(isset($tiles[$x][$y]))$tiles[$x][$y]->addRoute($route);
+	else $tiles[$x][$y]=$tile;
+}
+
+$black = 0;
+foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+
+INFO(RenderTextArray($tiles));
+INFO("Black Tiles = $black");
+
+INFO("Min X = $minx, Max X = $maxx, Min Y = $miny, Max Y = $maxy");
+
+function layTiles(&$tiles,$minx,$miny,$maxx,$maxy){
+	$dirty = false;
+	//fill the grid with white tiles
+	$copy = $tiles;
+	foreach($copy as $x => &$ys)foreach($ys as $y => &$tile){
+		$tx = $x-1;
+		while($tx>$minx && $tx<=$maxx){
+			if(!isset($tiles["$tx"]["$y"])){
+				$dirty = true;
+				$nx = $tx;
+				$nx += 1;
+				$tiles["$nx"]["$y"]->neighborTiles($tiles);
+
+			}
+			$tx -= 1;
+		}
+
+		$tx = $x+1;
+		while($tx<$maxx && $tx>=$minx){
+			if(!isset($tiles["$tx"]["$y"])){
+				$dirty = true;
+				$nx = $tx;
+				$nx -= 1;
+				$tiles["$nx"]["$y"]->neighborTiles($tiles);
+
+			}
+			$tx += 1;
+		}
+
+
+		$tx = $x-0.5;
+		$ty = $y-1;
+		while($ty>$miny && $ty<=$maxy){
+			if(!isset($tiles["$tx"]["$ty"])){
+				$nx = $tx;
+				$ny = $ty;
+				$nx += $ny%2 ? -0.5 : 0.5;
+				$ny += 1;
+				if(isset($tiles["$nx"]["$ny"])){
+					$dirty = true;
+					$tiles["$nx"]["$ny"]->neighborTiles($tiles);
+				}
+			}
+			$tx += $ty%2 ? -0.5 : 0.5;
+			$ty -= 1;
+		}
+
+
+		$tx = $x-0.5;
+		$ty = $y+1;
+		while($ty<$maxy && $ty>=$miny){
+			if(!isset($tiles["$tx"]["$ty"])){
+				$nx = $tx;
+				$ny = $ty;
+				$nx += $ny%2 ? -0.5 : 0.5;
+				$ny -= 1;
+				if(isset($tiles["$nx"]["$ny"])){
+					$dirty = true;
+					$tiles["$nx"]["$ny"]->neighborTiles($tiles);
+				}
+			}
+			$tx += $ty%2 ? -0.5 : 0.5;
+			$ty += 1;
+		}
+	}
+	return $dirty;
+}
+
+function step(&$tiles){
+
+	$flipList = array();
+	$copy = $tiles;
+	foreach($copy as $x => &$ys)foreach($ys as $y => &$tile){
+		if($tile->color()){
+			//black
+			switch($tile->neighborBlack($tiles)){
+			case 1:
+			case 2:
+				//stay black
+				break;
+			default:
+				$flipList[] = "$x,$y";
+				break;
+			}
+		}else{
+			switch($tile->neighborBlack($tiles)){
+			case 2:
+				//turn black
+				$flipList[] = "$x,$y";
+				break;
+
+			}
+		}
+
+	}
+	foreach($flipList as $csv){
+		list($x,$y) = explode(",",$csv);
+		$tiles["$x"]["$y"]->flip();
+	}
+}
+
+
+
+//populate the grid
+$minx -= 1;
+$miny -= 1;
+$maxx += 1;
+$maxy += 1;
+layTiles($tiles,$minx,$miny,$maxx,$maxy);
+$black = 0;
+foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+INFO("Black Tiles = $black");
+layTiles($tiles,$minx,$miny,$maxx,$maxy);
+$black = 0;
+foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+INFO("Black Tiles = $black");
+$black = 0;
+foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+INFO("Black Tiles = $black");
+$black = 0;
+foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+INFO("Black Tiles = $black");
+$black = 0;
+foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+INFO("Black Tiles = $black");
+$black = 0;
+foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+INFO("Black Tiles = $black");
+
+
+for($i=1;$i<=100;$i++){
+	step($tiles);
+	$black = 0;
+	foreach($tiles as $x => $ys)foreach($ys as $y => $tile)$black += $tile->color();
+	INFO("Black Tiles Day $i = $black");
+}
+
