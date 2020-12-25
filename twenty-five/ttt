@@ -1,0 +1,63 @@
+#!/usr/bin/php
+<?php
+
+namespace Agarithm;
+
+require_once(dirname(dirname(__FILE__))."/Agarithm/Strings.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Utils.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Scraper.php");
+require_once(dirname(dirname(__FILE__))."/Agarithm/Memo.php");
+
+//$raw = FILE(dirname(__FILE__)."/tiles");
+//$raw = array_map("trim",$raw);
+
+function between($val, $min, $max) {
+	GLOBAL $dbg;
+	settype($val,'integer');
+	return ($val >= $min && $val <= $max);
+}
+
+if(0){
+	//test data
+	$a = 5764801;
+	$b = 17807724;
+}else{
+	//My Data
+	$a = 12232269;
+	$b = 19452773;
+}
+
+function loop($key){
+	$maxLoop = 100000000; 
+	$loop = 0;
+	$value = 1;
+	$subject = 7;
+	while(true){
+		for($loop=1;$loop<$maxLoop;$loop++){
+			$value *= $subject;
+			$value %= 20201227;
+			if($value == $key)break;
+		}
+		if($value == $key)break;
+	}
+
+	return $value==$key ? $loop : -1 ;
+}
+
+function transform($subject,$loop){
+	$value = 1;
+	while($loop-->0){
+		$value *= $subject;
+		$value %= 20201227;
+	}
+	return $value;
+}
+
+
+$a_loop = loop($a);
+$b_loop = loop($b);
+$a_key = transform($b,$a_loop);
+$b_key = transform($a,$b_loop);
+INFO("LOOP = $a_loop, $b_loop");
+INFO("KEY = $a_key, $b_key = ".Strings::Human($a_key==$b_key));
+
